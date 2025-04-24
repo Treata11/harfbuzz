@@ -28,6 +28,9 @@ hb_base_sources = files(
   'hb-atomic.hh',
   'hb-bimap.hh',
   'hb-bit-page.hh',
+  'hb-bit-set.hh',
+  'hb-bit-set-invertible.hh',
+  'hb-bit-vector.hh',
   'hb-blob.cc',
   'hb-blob.hh',
   'hb-buffer-serialize.cc',
@@ -43,12 +46,15 @@ hb_base_sources = files(
   'hb-common.cc',
   'hb-config.hh',
   'hb-debug.hh',
+  'hb-decycler.hh',
   'hb-dispatch.hh',
   'hb-draw.cc',
   'hb-draw.hh',
   'hb-geometry.hh',
   'hb-paint.cc',
   'hb-paint.hh',
+  'hb-paint-bounded.cc',
+  'hb-paint-bounded.hh',
   'hb-paint-extents.cc',
   'hb-paint-extents.hh',
   'hb-face.cc',
@@ -198,6 +204,7 @@ hb_base_sources = files(
   'hb-ot-os2-unicode-ranges.hh',
   'hb-ot-post-macroman.hh',
   'hb-ot-post-table.hh',
+  'hb-ot-post-table-v2subset.hh',
   'hb-ot-shaper-arabic-fallback.hh',
   'hb-ot-shaper-arabic-joining-list.hh',
   'hb-ot-shaper-arabic-pua.hh',
@@ -240,7 +247,9 @@ hb_base_sources = files(
   'hb-ot-var-varc-table.hh',
   'hb-ot-var.cc',
   'hb-ot-vorg-table.hh',
+  'hb-priority-queue.hh',
   'hb-pool.hh',
+  'hb-repacker.hh',
   'hb-sanitize.hh',
   'hb-serialize.hh',
   'hb-set-digest.hh',
@@ -311,6 +320,7 @@ hb_base_headers = files(
   'hb-ot-shape.h',
   'hb-ot-var.h',
   'hb-ot.h',
+  'hb-script-list.h',
   'hb-set.h',
   'hb-shape-plan.h',
   'hb-shape.h',
@@ -324,6 +334,9 @@ hb_base_headers += hb_version_h
 
 hb_ft_sources = files('hb-ft.cc', 'hb-ft-colr.hh')
 hb_ft_headers = files('hb-ft.h')
+
+hb_fontations_sources = files()
+hb_fontations_headers = files('hb-fontations.h')
 
 hb_glib_sources = files('hb-glib.cc')
 hb_glib_headers = files('hb-glib.h')
@@ -339,6 +352,7 @@ hb_wasm_sources = files(
   'hb-wasm-api-common.hh',
   'hb-wasm-api-face.hh',
   'hb-wasm-api-font.hh',
+  'hb-wasm-api-list.hh',
   'hb-wasm-api-shape.hh',
   'hb-wasm-shape.cc',
 )
@@ -346,10 +360,10 @@ hb_wasm_headers = files()
 
 # System-dependent sources and headers
 
-hb_coretext_sources = files('hb-coretext-shape.cc', 'hb-coretext-font.cc')
+hb_coretext_sources = files('hb-coretext.cc', 'hb-coretext.hh', 'hb-coretext-font.cc', 'hb-coretext-shape.cc')
 hb_coretext_headers = files('hb-coretext.h')
 
-hb_directwrite_sources = files('hb-directwrite.cc')
+hb_directwrite_sources = files('hb-directwrite.cc', 'hb-directwrite.hh', 'hb-directwrite-font.cc', 'hb-directwrite-shape.cc')
 hb_directwrite_headers = files('hb-directwrite.h')
 
 hb_gdi_sources = files('hb-gdi.cc')
@@ -381,6 +395,8 @@ hb_subset_sources = files(
   'hb-subset-instancer-solver.hh',
   'hb-subset-instancer-solver.cc',
   'hb-subset-plan.cc',
+  'hb-subset-plan-layout.cc',
+  'hb-subset-plan-var.cc',
   'hb-subset-plan.hh',
   'hb-subset-plan-member-list.hh',
   'hb-subset-serialize.cc',
@@ -502,6 +518,7 @@ endif
 if conf.get('HAVE_DIRECTWRITE', 0) == 1
   hb_sources += hb_directwrite_sources
   hb_headers += hb_directwrite_headers
+  harfbuzz_deps += directwrite_dep
   # hb-directwrite needs a C++ linker
   libharfbuzz_link_language = 'cpp'
 endif
@@ -510,6 +527,15 @@ if conf.get('HAVE_CORETEXT', 0) == 1
   hb_sources += hb_coretext_sources
   hb_headers += hb_coretext_headers
   harfbuzz_deps += coretext_deps
+endif
+
+if conf.get('HAVE_FONTATIONS', 0) == 1
+
+  subdir('fontations')
+
+  hb_sources += hb_fontations_sources
+  hb_headers += hb_fontations_headers
+  harfbuzz_deps += [harfbuzz_fontations_dep]
 endif
 
 have_icu = conf.get('HAVE_ICU', 0) == 1
@@ -575,7 +601,7 @@ defs_list = [harfbuzz_def]
 version = '0.@0@.0'.format(hb_version_int)
 
 extra_hb_cpp_args = []
-if cpp.get_define('_MSC_FULL_VER') != ''
+if cpp_is_microsoft_compiler
   if get_option('default_library') != 'static'
     extra_hb_cpp_args += '-DHB_DLL_EXPORT'
   endif
@@ -649,6 +675,7 @@ if conf.get('HAVE_CAIRO', 0) == 1
   hb_cairo_sources = [
     'hb-cairo.cc',
     'hb-cairo-utils.cc',
+    'hb-cairo-utils.hh',
     'hb-static.cc'
   ]
 
@@ -662,7 +689,7 @@ if conf.get('HAVE_CAIRO', 0) == 1
     include_directories: incconfig,
     dependencies: [m_dep, cairo_dep],
     link_with: [libharfbuzz],
-     cpp_args: cpp_args + extra_hb_cpp_args,
+    cpp_args: cpp_args + extra_hb_cpp_args,
     soversion: hb_so_version,
     version: version,
     install: true,
@@ -696,7 +723,7 @@ if get_option('tests').enabled()
   # TODO: Microsoft LINK gives the following because extern, non dllexport
   # symbols can only be used when linking against a static library
   # error LNK2019: unresolved external symbol "unsigned __int64 const * const _hb_NullPool"
-  if cpp.get_define('_MSC_FULL_VER') == ''
+  if not cpp_is_microsoft_compiler
     noinst_programs = {
       'main': 'main.cc',
       'test-basics': 'test.cc',
@@ -725,6 +752,7 @@ if get_option('tests').enabled()
     'test-bimap': ['test-bimap.cc', 'hb-static.cc'],
     'test-cff': ['test-cff.cc', 'hb-static.cc'],
     'test-classdef-graph': ['graph/test-classdef-graph.cc', 'hb-static.cc', 'graph/gsubgpos-context.cc'],
+    'test-decycler': ['test-decycler.cc', 'hb-static.cc'],
     'test-iter': ['test-iter.cc', 'hb-static.cc'],
     'test-machinery': ['test-machinery.cc', 'hb-static.cc'],
     'test-map': ['test-map.cc', 'hb-static.cc'],
@@ -742,7 +770,7 @@ if get_option('tests').enabled()
     'test-unicode-ranges': ['test-unicode-ranges.cc'],
   }
   foreach name, source : compiled_tests
-    if cpp.get_define('_MSC_FULL_VER') != '' and source.contains('hb-static.cc')
+    if cpp_is_microsoft_compiler and source.contains('hb-static.cc')
       # TODO: Microsoft compilers cannot link tests using hb-static.cc, fix them
       continue
     endif
@@ -814,15 +842,10 @@ have_gobject = conf.get('HAVE_GOBJECT', 0) == 1
 cmake_config = configuration_data()
 cmake_config_dir = cmake_package_install_dir / 'harfbuzz'
 
-have_fs_relative_to = meson.version().version_compare('>=1.3.0')
-
-if not have_fs_relative_to
-  relative_to = find_program('relative_to.py')
-endif
-
-if have_fs_relative_to
+if meson.version().version_compare('>=1.3.0')
   cmake_package_prefix_dir = fs.relative_to(get_option('prefix'), get_option('prefix') / cmake_config_dir)
 else
+  relative_to = find_program('relative_to.py')
   cmake_package_prefix_dir = run_command(relative_to, get_option('prefix'), get_option('prefix') / cmake_config_dir, check: true).stdout().strip()
 endif
 
@@ -834,7 +857,7 @@ cmake_package_prefix_dir = '${CMAKE_CURRENT_LIST_DIR}/@0@'.format(cmake_package_
 cmake_install_includedir = get_option('includedir')
 
 if fs.is_absolute(cmake_install_includedir)
-  if have_fs_relative_to
+  if meson.version().version_compare('>=1.3.0')
     cmake_install_includedir = fs.relative_to(cmake_install_includedir, get_option('prefix'))
   else
     cmake_install_includedir = run_command(relative_to, cmake_install_includedir, get_option('prefix'), check: true).stdout().strip()
@@ -844,7 +867,7 @@ endif
 cmake_install_libdir = get_option('libdir')
 
 if fs.is_absolute(cmake_install_libdir)
-  if have_fs_relative_to
+  if meson.version().version_compare('>=1.3.0')
     cmake_install_libdir = fs.relative_to(cmake_install_libdir, get_option('prefix'))
   else
     cmake_install_libdir = run_command(relative_to, cmake_install_libdir, get_option('prefix'), check: true).stdout().strip()
@@ -1016,16 +1039,22 @@ if get_option('tests').enabled()
 
   env = environment()
   env.set('srcdir', meson.current_source_dir())
-  env.set('base_srcdir', meson.source_root())
+  env.set('base_srcdir', meson.project_source_root())
   env.set('builddir', meson.current_build_dir())
   env.set('libs', meson.current_build_dir()) # TODO: Merge this with builddir after autotools removal
   HBSOURCES = []
   foreach f : hb_sources
+    if meson.version().version_compare('>=1.4.0')
+      f = f.full_path()
+    endif
     HBSOURCES += '@0@'.format(f)
   endforeach
   env.set('HBSOURCES', ' '.join(HBSOURCES))
   HBHEADERS = []
   foreach f : hb_headers
+    if meson.version().version_compare('>=1.4.0')
+      f = f.full_path()
+    endif
     HBHEADERS += '@0@'.format(f)
   endforeach
   env.set('HBHEADERS', ' '.join(HBHEADERS))

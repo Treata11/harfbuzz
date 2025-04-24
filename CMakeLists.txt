@@ -161,7 +161,9 @@ set (subset_project_sources
      ${PROJECT_SOURCE_DIR}/src/hb-subset-accelerator.hh
      ${PROJECT_SOURCE_DIR}/src/hb-subset-plan.cc
      ${PROJECT_SOURCE_DIR}/src/hb-subset-plan.hh
+     ${PROJECT_SOURCE_DIR}/src/hb-subset-plan-layout.cc
      ${PROJECT_SOURCE_DIR}/src/hb-subset-plan-member-list.hh
+     ${PROJECT_SOURCE_DIR}/src/hb-subset-plan-var.cc
      ${PROJECT_SOURCE_DIR}/src/hb-subset-serialize.cc
      ${PROJECT_SOURCE_DIR}/src/hb-subset.cc
      ${PROJECT_SOURCE_DIR}/src/hb-subset.hh
@@ -204,6 +206,7 @@ set (project_headers
      ${PROJECT_SOURCE_DIR}/src/hb-ot.h
      ${PROJECT_SOURCE_DIR}/src/hb-paint.h
      ${PROJECT_SOURCE_DIR}/src/hb-set.h
+     ${PROJECT_SOURCE_DIR}/src/hb-script-list.h
      ${PROJECT_SOURCE_DIR}/src/hb-shape-plan.h
      ${PROJECT_SOURCE_DIR}/src/hb-shape.h
      ${PROJECT_SOURCE_DIR}/src/hb-style.h
@@ -233,7 +236,7 @@ if (HB_HAVE_FREETYPE AND NOT TARGET freetype)
   set (CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES} ${FREETYPE_INCLUDE_DIRS})
   set (CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ${FREETYPE_LIBRARIES})
 
-  check_funcs(FT_Get_Var_Blend_Coordinates FT_Set_Var_Blend_Coordinates FT_Done_MM_Var)
+  check_funcs(FT_Get_Var_Blend_Coordinates FT_Set_Var_Blend_Coordinates FT_Done_MM_Var FT_Get_Transform)
 endif ()
 
 if (HB_HAVE_FREETYPE)
@@ -334,15 +337,15 @@ endif ()
 if (WIN32 AND HB_HAVE_GDI)
   add_definitions(-DHAVE_GDI)
   list(APPEND project_headers ${PROJECT_SOURCE_DIR}/src/hb-gdi.h)
-  list(APPEND THIRD_PARTY_LIBS gdi32)
-  list(APPEND PC_LIBS_PRIV -lgdi32)
+  list(APPEND THIRD_PARTY_LIBS gdi32 user32)
+  list(APPEND PC_LIBS_PRIV -lgdi32 -luser32)
 endif ()
 
 if (WIN32 AND HB_HAVE_UNISCRIBE)
   add_definitions(-DHAVE_UNISCRIBE)
   list(APPEND project_headers ${PROJECT_SOURCE_DIR}/src/hb-uniscribe.h)
-  list(APPEND THIRD_PARTY_LIBS usp10 gdi32 rpcrt4)
-  list(APPEND PC_LIBS_PRIV -lusp10 -lgdi32 -lrpcrt4)
+  list(APPEND THIRD_PARTY_LIBS usp10 gdi32 rpcrt4 user32)
+  list(APPEND PC_LIBS_PRIV -lusp10 -lgdi32 -lrpcrt4 -luser32)
 endif ()
 
 if (WIN32 AND HB_HAVE_DIRECTWRITE)
